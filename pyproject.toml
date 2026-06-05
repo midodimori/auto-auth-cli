@@ -1,0 +1,22 @@
+[project]
+name = "auto-auth-cli"
+version = "0.1.0"
+description = "Profile-aware auth wrapper for coder agent CLIs"
+readme = "README.md"
+authors = [
+    { name = "midodimori", email = "midodimori@proton.me" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+auto-auth = "auto_auth_cli.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.14,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
