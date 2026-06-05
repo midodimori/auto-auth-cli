@@ -2,12 +2,38 @@
 name = "auto-auth-cli"
 version = "0.1.0"
 description = "Profile-aware auth wrapper for coder agent CLIs"
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
     { name = "midodimori", email = "midodimori@proton.me" }
 ]
+license = { text = "MIT" }
 requires-python = ">=3.13"
+keywords = [
+    "ai",
+    "auth",
+    "cli",
+    "codex",
+    "profile",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development",
+    "Topic :: System :: Systems Administration",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/midodimori/auto-auth-cli"
+Repository = "https://github.com/midodimori/auto-auth-cli"
+Issues = "https://github.com/midodimori/auto-auth-cli/issues"
 
 [project.scripts]
 auto-auth = "auto_auth_cli.cli:main"

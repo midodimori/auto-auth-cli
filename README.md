@@ -2,6 +2,11 @@
 
 Profile-aware auth switching for coder agent CLIs.
 
+[![PyPI - Version](https://img.shields.io/pypi/v/auto-auth-cli?logo=pypi&logoColor=white)](https://pypi.org/project/auto-auth-cli/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/auto-auth-cli?logo=pypi&logoColor=white)](https://pypi.org/project/auto-auth-cli/)
+[![Python Version](https://img.shields.io/pypi/pyversions/auto-auth-cli?logo=python&logoColor=white)](https://pypi.org/project/auto-auth-cli/)
+[![License](https://img.shields.io/github/license/midodimori/auto-auth-cli)](https://github.com/midodimori/auto-auth-cli/blob/main/LICENSE)
+
 `auto-auth` lets you keep multiple authentication profiles for a supported CLI and launch that CLI with the profile you choose. For Codex, it only replaces:
 
 ```text
@@ -15,7 +20,8 @@ Everything else in `~/.codex` stays shared across profiles.
 - [Supported Tools](#supported-tools)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
-  - [Quick Try with uvx](#quick-try-with-uvx)
+  - [From PyPI](#from-pypi)
+  - [Quick Try from GitHub](#quick-try-from-github)
   - [Install from GitHub](#install-from-github)
   - [From Source](#from-source)
 - [Quick Start](#quick-start)
@@ -23,6 +29,7 @@ Everything else in `~/.codex` stays shared across profiles.
   - [Codex](#codex)
   - [Claude Code](#claude-code)
 - [Stored Files](#stored-files)
+- [Publishing](#publishing)
 - [Development](#development)
 
 ## Supported Tools
@@ -42,7 +49,31 @@ Everything else in `~/.codex` stays shared across profiles.
 
 Use `--python 3.13` so uv builds the isolated tool environment with a supported Python version.
 
-### Quick Try with uvx
+### From PyPI
+
+Use this for the latest published release.
+
+**Quick try (no installation):**
+
+```sh
+uvx --python 3.13 --from auto-auth-cli@latest auto-auth codex --status
+```
+
+**Install globally:**
+
+```sh
+uv tool install --python 3.13 auto-auth-cli
+```
+
+Then run from any directory:
+
+```sh
+auto-auth codex --status
+```
+
+> **Upgrading:** Run `uv tool upgrade --python 3.13 auto-auth-cli`.
+
+### Quick Try from GitHub
 
 Run `auto-auth` directly from GitHub without installing it globally:
 
@@ -229,6 +260,20 @@ Codex auth backups:
 ```
 
 If `AUTO_AUTH_HOME` is set, those paths move under that directory.
+
+## Publishing
+
+Publishing uses GitHub Actions and PyPI Trusted Publishing. Configure a trusted publisher on PyPI with:
+
+| Setting | Value |
+|---------|-------|
+| PyPI project | `auto-auth-cli` |
+| Owner | `midodimori` |
+| Repository | `auto-auth-cli` |
+| Workflow name | `publish-pypi.yml` |
+| Environment name | Leave empty |
+
+The workflow publishes when a GitHub release is published. It can also be run manually from GitHub Actions.
 
 ## Development
 
