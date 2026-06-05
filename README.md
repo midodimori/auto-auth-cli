@@ -265,4 +265,6 @@ If `AUTO_AUTH_HOME` is set, those paths move under that directory.
 ```sh
 uv sync
 uv run pytest -q
+uv run ruff check .
+uv run ty check
 ```
