@@ -263,7 +263,9 @@ If `AUTO_AUTH_HOME` is set, those paths move under that directory.
 ## Development
 
 ```sh
-uv sync
+uv sync --all-groups
+uv run pre-commit install
+uv run pre-commit run --all-files
 uv run pytest -q
 uv run ruff check .
 uv run ty check
