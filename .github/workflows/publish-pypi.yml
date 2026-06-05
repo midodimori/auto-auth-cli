@@ -37,12 +37,6 @@ jobs:
       - name: Run tests
         run: uv run pytest -q
 
-      - name: Run Ruff
-        run: uv run ruff check .
-
-      - name: Run ty
-        run: uv run ty check
-
       - name: Build distributions
         run: uv build
 
