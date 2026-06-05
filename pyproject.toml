@@ -1,6 +1,6 @@
 [project]
 name = "auto-auth-cli"
-version = "0.1.0"
+version = "0.0.1"
 description = "Profile-aware auth wrapper for coder agent CLIs"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
