@@ -156,6 +156,7 @@ Pass Codex arguments after `--`:
 ```sh
 auto-auth codex --profile you -- -m gpt-5.5  # Run Codex with a specific profile and model
 auto-auth codex --auto -- -m gpt-5.5  # Auto-select a profile, then run Codex with a model
+auto-auth codex --auto -- resume --last  # Auto-select a profile, then resume the most recent Codex CLI session
 auto-auth codex --auto -- --yolo app  # Auto-select a profile, then run the Codex app in yolo mode
 ```
 
@@ -224,10 +225,12 @@ Put Codex arguments after `--`:
 ```sh
 auto-auth codex --profile you -- -m gpt-5.5  # Run Codex with a specific profile and model
 auto-auth codex --auto -- -m gpt-5.5  # Auto-select a profile, then run Codex with a model
+auto-auth codex --profile you -- resume --last  # Run Codex with a specific profile and resume the most recent CLI session
+auto-auth codex --auto -- resume --last  # Auto-select a profile, then resume the most recent Codex CLI session
 auto-auth codex --auto -- --yolo app  # Auto-select a profile, then run the Codex app in yolo mode
 ```
 
-The last example runs the Codex app in yolo mode after selecting an available profile.
+The `resume --last` examples use the Codex CLI resume command to continue the most recent saved CLI session after `auto-auth` installs the selected profile. The last example runs the Codex app in yolo mode after selecting an available profile.
 
 #### Codex Environment Variables
 
