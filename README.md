@@ -189,7 +189,7 @@ auto-auth codex --setup --label work
 auto-auth codex --status
 ```
 
-The status output shows the active profile, saved profiles, detected plan type, and active marker when the saved account matches the current `~/.codex/auth.json`.
+The status output shows the active profile, saved profiles, detected plan type, active state, and the primary and secondary quota windows for each profile.
 
 #### Select a Profile
 

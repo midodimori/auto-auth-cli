@@ -8,17 +8,45 @@ import shutil
 import subprocess
 import tempfile
 import threading
+from datetime import datetime, timezone
 from typing import Any
 
 from auto_auth_cli.store import Profile
+from auto_auth_cli.tools.base import QuotaStatus
 
 
 def profile_has_available_quota(profile: Profile, executable_path: str) -> bool:
+    response = read_profile_rate_limits(profile, executable_path)
+    return is_usable_rate_limits(response)
+
+
+def read_profile_rate_limits(profile: Profile, executable_path: str) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="auto-auth-codex-probe-") as temp_dir:
         temp_home = Path(temp_dir)
         shutil.copy2(profile.auth_path, temp_home / "auth.json")
-        response = read_account_rate_limits(executable_path, temp_home)
-    return is_usable_rate_limits(response)
+        return read_account_rate_limits(executable_path, temp_home)
+
+
+def read_profile_quota_status(profile: Profile, executable_path: str) -> QuotaStatus:
+    try:
+        response = read_profile_rate_limits(profile, executable_path)
+        return describe_rate_limit_windows(response)
+    except (OSError, RuntimeError) as error:
+        return _same_status(_quota_error_status(error))
+
+
+def describe_rate_limit_windows(response: dict[str, Any]) -> QuotaStatus:
+    rate_limits = response.get("rateLimits")
+    if not isinstance(rate_limits, dict):
+        return QuotaStatus(primary="unknown", secondary="unknown")
+
+    reached_type = rate_limits.get("rateLimitReachedType")
+    return QuotaStatus(
+        primary=_describe_window(rate_limits.get("primary"), "primary", reached_type),
+        secondary=_describe_window(
+            rate_limits.get("secondary"), "secondary", reached_type
+        ),
+    )
 
 
 def is_usable_rate_limits(response: dict[str, Any]) -> bool:
@@ -35,6 +63,8 @@ def is_usable_rate_limits(response: dict[str, Any]) -> bool:
 def read_account_rate_limits(executable_path: str, codex_home: Path) -> dict[str, Any]:
     env = os.environ.copy()
     env["CODEX_HOME"] = str(codex_home)
+    env["AUTO_AUTH_CODEX_WRAPPER_ACTIVE"] = "1"
+    env["CMUX_CODEX_AUTO_AUTH_DISABLED"] = "1"
     process = subprocess.Popen(
         [executable_path, "app-server", "--listen", "stdio://"],
         stdin=subprocess.PIPE,
@@ -47,11 +77,15 @@ def read_account_rate_limits(executable_path: str, codex_home: Path) -> dict[str
         raise RuntimeError("failed to open codex app-server pipes")
 
     lines: queue.Queue[str] = queue.Queue()
-    reader = threading.Thread(target=_read_stdout, args=(process.stdout, lines), daemon=True)
+    reader = threading.Thread(
+        target=_read_stdout, args=(process.stdout, lines), daemon=True
+    )
     reader.start()
 
     try:
-        _send(process, {"method": "initialize", "id": 1, "params": _initialize_params()})
+        _send(
+            process, {"method": "initialize", "id": 1, "params": _initialize_params()}
+        )
         _read_response(lines, request_id=1, timeout_seconds=10)
         _send(process, {"method": "initialized", "params": {}})
         _send(process, {"method": "account/rateLimits/read", "id": 2})
@@ -85,6 +119,103 @@ def _window_allows(value: Any) -> bool:
     if not isinstance(used_percent, int | float):
         return False
     return used_percent < 100
+
+
+def _describe_window(value: Any, window_name: str, reached_type: Any) -> str:
+    if value is None:
+        return "available"
+    if not isinstance(value, dict):
+        return "unknown"
+
+    parts: list[str] = []
+    used_percent = _number(value.get("usedPercent"))
+    if used_percent is not None:
+        parts.append(f"{_format_percent(used_percent)} used")
+
+    resets_at = _number(value.get("resetsAt"))
+    if resets_at is not None:
+        parts.append(f"resets {_format_reset(resets_at)}")
+
+    if _is_limit_reached(window_name, reached_type, used_percent):
+        parts.append("limit reached")
+
+    return ", ".join(parts) if parts else "available"
+
+
+def _is_limit_reached(
+    window_name: str, reached_type: Any, used_percent: float | None
+) -> bool:
+    if used_percent is not None and used_percent >= 100:
+        return True
+    if not isinstance(reached_type, str):
+        return False
+    normalized = reached_type.lower()
+    return normalized in {window_name, "all", "both"}
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _format_percent(value: float) -> str:
+    formatted = (
+        str(int(value))
+        if value.is_integer()
+        else f"{value:.1f}".rstrip("0").rstrip(".")
+    )
+    return f"{formatted}%"
+
+
+def _format_reset(resets_at: float) -> str:
+    seconds = resets_at - datetime.now(timezone.utc).timestamp()
+    return _format_duration(seconds)
+
+
+def _format_duration(seconds: float) -> str:
+    if seconds <= 0:
+        return "now"
+
+    total_seconds = int(round(seconds))
+    days, remainder = divmod(total_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    parts: list[str] = []
+    if days:
+        parts.append(_duration_part(days, "day"))
+    if hours and len(parts) < 2:
+        parts.append(_duration_part(hours, "hour"))
+    if minutes and len(parts) < 2:
+        parts.append(_duration_part(minutes, "minute"))
+    if not parts:
+        parts.append(_duration_part(seconds, "second"))
+    return "in " + " ".join(parts)
+
+
+def _duration_part(value: int, unit: str) -> str:
+    suffix = "" if value == 1 else "s"
+    return f"{value} {unit}{suffix}"
+
+
+def _same_status(status: str) -> QuotaStatus:
+    return QuotaStatus(primary=status, secondary=status)
+
+
+def _quota_error_status(error: Exception) -> str:
+    message = str(error)
+    if "token_expired" in message:
+        return "token expired"
+    if "token_invalidated" in message:
+        return "token invalidated"
+    if "token_revoked" in message:
+        return "token revoked"
+    if "401 Unauthorized" in message:
+        return "auth failed"
+    return "unavailable"
 
 
 def _initialize_params() -> dict[str, Any]:

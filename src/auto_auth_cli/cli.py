@@ -11,9 +11,9 @@ import tempfile
 
 from auto_auth_cli.metadata import AuthMetadata, sanitize_profile_key
 from auto_auth_cli.paths import ToolPaths
-from auto_auth_cli.store import ProfileStore
+from auto_auth_cli.store import Profile, ProfileStore
 from auto_auth_cli.tools import get_tool, tool_names
-from auto_auth_cli.tools.base import ToolAdapter
+from auto_auth_cli.tools.base import QuotaStatus, ToolAdapter
 
 
 def main() -> None:
@@ -29,19 +29,26 @@ def run(argv: list[str]) -> int:
 
     try:
         if args.status:
+            _sync_active_profile(adapter, store, paths)
             return _status(adapter, store, paths)
         if args.setup:
             return _setup(adapter, store, args.label)
         if args.auto:
             return _auto(adapter, store, args.tool_args)
         if args.profile:
+            _sync_active_profile(adapter, store, paths)
             profile = store.install_profile(args.profile)
             print(
                 f"Using {adapter.name} auth profile: {profile.metadata.label}",
                 file=sys.stderr,
             )
             return _exec_tool(adapter, args.tool_args)
-    except (OSError, ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+    except (
+        OSError,
+        ValueError,
+        subprocess.CalledProcessError,
+        json.JSONDecodeError,
+    ) as error:
         print(f"auto-auth: {error}", file=sys.stderr)
         return 1
 
@@ -58,10 +65,22 @@ def build_parser() -> argparse.ArgumentParser:
             tool_name, help=f"manage and launch {tool_name} auth profiles"
         )
         group = tool_parser.add_mutually_exclusive_group(required=True)
-        group.add_argument("--setup", action="store_true", help=f"create a profile via {tool_name} login")
-        group.add_argument("--status", action="store_true", help=f"list {tool_name} auth profiles")
-        group.add_argument("--auto", action="store_true", help="use the first profile with available quota")
-        group.add_argument("--profile", help="profile email, key, account id, or unique prefix")
+        group.add_argument(
+            "--setup",
+            action="store_true",
+            help=f"create a profile via {tool_name} login",
+        )
+        group.add_argument(
+            "--status", action="store_true", help=f"list {tool_name} auth profiles"
+        )
+        group.add_argument(
+            "--auto",
+            action="store_true",
+            help="use the first profile with available quota",
+        )
+        group.add_argument(
+            "--profile", help="profile email, key, account id, or unique prefix"
+        )
         tool_parser.add_argument(
             "--label",
             help="fallback label for setup when the auth token has no email or account id",
@@ -86,15 +105,64 @@ def _status(adapter: ToolAdapter, store: ProfileStore, paths: ToolPaths) -> int:
         print("  none")
         return 0
 
+    quota_statuses = _profile_quota_statuses(adapter, profiles)
+    rows: list[list[str]] = []
     for profile in profiles:
-        marker = (
-            " active"
+        state = (
+            "active"
             if active_account and profile.metadata.account_id == active_account
-            else ""
+            else "saved"
         )
         plan = profile.metadata.plan_type or "unknown"
-        print(f"  {profile.metadata.label}\t{plan}{marker}")
+        quota = quota_statuses.get(
+            profile.metadata.key,
+            QuotaStatus(primary="not checked", secondary="not checked"),
+        )
+        rows.append(
+            [
+                profile.metadata.label,
+                plan,
+                state,
+                quota.primary,
+                quota.secondary,
+            ]
+        )
+    _print_table(["Profile", "Plan", "State", "Primary quota", "Secondary quota"], rows)
     return 0
+
+
+def _profile_quota_statuses(
+    adapter: ToolAdapter, profiles: list[Profile]
+) -> dict[str, QuotaStatus]:
+    status_provider = getattr(adapter, "profile_quota_statuses", None)
+    if status_provider is None:
+        return {}
+
+    executable = shutil.which(adapter.executable)
+    if executable is None:
+        return {
+            profile.metadata.key: QuotaStatus(
+                primary=f"{adapter.executable} not found",
+                secondary=f"{adapter.executable} not found",
+            )
+            for profile in profiles
+        }
+    return status_provider(profiles, executable)
+
+
+def _print_table(headers: list[str], rows: list[list[str]]) -> None:
+    widths = [
+        max(len(header), *(len(row[index]) for row in rows))
+        for index, header in enumerate(headers)
+    ]
+    print("  " + _format_table_row(headers, widths))
+    print("  " + _format_table_row(["-" * width for width in widths], widths))
+    for row in rows:
+        print("  " + _format_table_row(row, widths))
+
+
+def _format_table_row(values: list[str], widths: list[int]) -> str:
+    return "  ".join(value.ljust(widths[index]) for index, value in enumerate(values))
 
 
 def _setup(adapter: ToolAdapter, store: ProfileStore, label: str | None) -> int:
@@ -112,7 +180,9 @@ def _setup(adapter: ToolAdapter, store: ProfileStore, label: str | None) -> int:
         auth_json = _read_json(adapter.active_auth_path(temp_home))
         metadata = _metadata_with_label_fallback(adapter, auth_json, label)
         if metadata.label == "unknown":
-            raise ValueError("could not extract email or account id; rerun with --label")
+            raise ValueError(
+                "could not extract email or account id; rerun with --label"
+            )
         store.save_profile(metadata, auth_json)
         print(f"Saved {adapter.name} auth profile: {metadata.label}")
     return 0
@@ -123,6 +193,8 @@ def _auto(adapter: ToolAdapter, store: ProfileStore, tool_args: list[str]) -> in
     if executable is None:
         raise OSError(f"{adapter.executable} executable not found in PATH")
 
+    paths = ToolPaths.from_env(adapter)
+    _sync_active_profile(adapter, store, paths)
     profiles = adapter.sort_profiles_for_auto(store.list_profiles())
     if not profiles:
         raise ValueError(f"no {adapter.name} auth profiles saved")
@@ -166,6 +238,21 @@ def _exec_tool(adapter: ToolAdapter, tool_args: list[str]) -> int:
     except SystemExit as exc:
         return int(exc.code or 0)
     return 0
+
+
+def _sync_active_profile(
+    adapter: ToolAdapter, store: ProfileStore, paths: ToolPaths
+) -> None:
+    if not paths.active_auth_path.exists():
+        return
+
+    try:
+        active_json = _read_json(paths.active_auth_path)
+        active_metadata = adapter.extract_metadata(active_json)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return
+
+    store.sync_profile(active_metadata, active_json)
 
 
 def _read_json(path: Path) -> dict:

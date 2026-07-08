@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
 from auto_auth_cli.metadata import AuthMetadata
 from auto_auth_cli.store import Profile
+
+
+@dataclass(frozen=True)
+class QuotaStatus:
+    primary: str
+    secondary: str
 
 
 class ToolAdapter(Protocol):
