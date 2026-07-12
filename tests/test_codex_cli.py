@@ -102,8 +102,7 @@ def test_setup_logs_in_with_temp_codex_home_and_saves_profile(
     def fake_run(command, check, env):
         assert command == ["/bin/codex", "login"]
         assert check is True
-        assert env["AUTO_AUTH_CODEX_WRAPPER_ACTIVE"] == "1"
-        assert env["CMUX_CODEX_AUTO_AUTH_DISABLED"] == "1"
+        assert env["AUTO_AUTH_CLI_ACTIVE"] == "1"
         temp_auth = Path(env["CODEX_HOME"]) / "auth.json"
         temp_auth.write_text(
             json.dumps(
@@ -145,11 +144,11 @@ def test_profile_switch_replaces_only_active_auth_then_execs_codex(
     active_auth.write_text(json.dumps({"tokens": {"refresh_token": "old"}}))
     calls = []
 
-    def fake_execvp(program, args):
-        calls.append((program, args))
+    def fake_execvpe(program, args, env):
+        calls.append((program, args, env))
         raise SystemExit(0)
 
-    monkeypatch.setattr("os.execvp", fake_execvp)
+    monkeypatch.setattr("os.execvpe", fake_execvpe)
 
     assert run(["codex", "--profile", "minh", "--", "-m", "gpt-5.2"]) == 0
 
@@ -157,7 +156,19 @@ def test_profile_switch_replaces_only_active_auth_then_execs_codex(
     backups = list((tmp_path / "auto" / "codex" / "backups").glob("auth.*.json"))
     assert len(backups) == 1
     assert json.loads(backups[0].read_text()) == {"tokens": {"refresh_token": "old"}}
-    assert calls == [("codex", ["codex", "-m", "gpt-5.2"])]
+    assert len(calls) == 1
+    program, args, env = calls[0]
+    assert program == "codex"
+    assert args == ["codex", "-m", "gpt-5.2"]
+    assert env["AUTO_AUTH_CLI_ACTIVE"] == "1"
+    assert base64.b64decode(env["AUTO_AUTH_CLI_RELAUNCH_ARGV_B64"]).split(b"\0") == [
+        b"auto-auth",
+        b"codex",
+        b"--profile",
+        b"minh",
+        b"--",
+        b"",
+    ]
 
 
 def test_profile_switch_syncs_current_active_auth_before_install(
@@ -181,10 +192,10 @@ def test_profile_switch_syncs_current_active_auth_before_install(
     )
     write_active_profile(tmp_path, "active@example.com", "acct-active")
 
-    def fake_execvp(program, args):
+    def fake_execvpe(program, args, env):
         raise SystemExit(0)
 
-    monkeypatch.setattr("os.execvp", fake_execvp)
+    monkeypatch.setattr("os.execvpe", fake_execvpe)
 
     assert run(["codex", "--profile", "target"]) == 0
 
@@ -270,7 +281,7 @@ def test_auto_uses_first_usable_profile_then_execs_codex(tmp_path: Path, monkeyp
         ]
         return profiles[1]
 
-    def fake_execvp(program, args):
+    def fake_execvpe(program, args, env):
         calls.append((program, args))
         raise SystemExit(0)
 
@@ -278,7 +289,7 @@ def test_auto_uses_first_usable_profile_then_execs_codex(tmp_path: Path, monkeyp
         "auto_auth_cli.tools.codex.adapter.CodexAdapter.select_usable_profile",
         fake_select,
     )
-    monkeypatch.setattr("os.execvp", fake_execvp)
+    monkeypatch.setattr("os.execvpe", fake_execvpe)
 
     assert run(["codex", "--auto", "--", "-m", "gpt-5.2"]) == 0
 
@@ -316,14 +327,14 @@ def test_auto_syncs_active_profile_before_selecting(tmp_path: Path, monkeypatch)
         assert saved_auth["last_refresh"] == "2026-07-08T17:10:00Z"
         return profiles[0]
 
-    def fake_execvp(program, args):
+    def fake_execvpe(program, args, env):
         raise SystemExit(0)
 
     monkeypatch.setattr(
         "auto_auth_cli.tools.codex.adapter.CodexAdapter.select_usable_profile",
         fake_select,
     )
-    monkeypatch.setattr("os.execvp", fake_execvp)
+    monkeypatch.setattr("os.execvpe", fake_execvpe)
 
     assert run(["codex", "--auto"]) == 0
 
@@ -356,14 +367,14 @@ def test_auto_prioritizes_smaller_subscription_profiles(tmp_path: Path, monkeypa
         seen_order.extend(profile.metadata.email for profile in profiles)
         return profiles[0]
 
-    def fake_execvp(program, args):
+    def fake_execvpe(program, args, env):
         raise SystemExit(0)
 
     monkeypatch.setattr(
         "auto_auth_cli.tools.codex.adapter.CodexAdapter.select_usable_profile",
         fake_select,
     )
-    monkeypatch.setattr("os.execvp", fake_execvp)
+    monkeypatch.setattr("os.execvpe", fake_execvpe)
 
     assert run(["codex", "--auto"]) == 0
 

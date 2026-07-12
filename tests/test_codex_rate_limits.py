@@ -69,5 +69,4 @@ def test_rate_limit_probe_disables_auto_auth_wrapper(tmp_path: Path, monkeypatch
         "stdio://",
     ]
     assert captured["env"]["CODEX_HOME"] == str(tmp_path)
-    assert captured["env"]["AUTO_AUTH_CODEX_WRAPPER_ACTIVE"] == "1"
-    assert captured["env"]["CMUX_CODEX_AUTO_AUTH_DISABLED"] == "1"
+    assert captured["env"]["AUTO_AUTH_CLI_ACTIVE"] == "1"

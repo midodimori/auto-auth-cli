@@ -30,8 +30,7 @@ class CodexAdapter:
     def setup_env(self, temp_home: Path) -> dict[str, str]:
         env = os.environ.copy()
         env["CODEX_HOME"] = str(temp_home)
-        env["AUTO_AUTH_CODEX_WRAPPER_ACTIVE"] = "1"
-        env["CMUX_CODEX_AUTO_AUTH_DISABLED"] = "1"
+        env["AUTO_AUTH_CLI_ACTIVE"] = "1"
         return env
 
     def login_command(self, executable_path: str) -> list[str]:

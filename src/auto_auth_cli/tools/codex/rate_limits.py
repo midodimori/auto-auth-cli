@@ -63,8 +63,7 @@ def is_usable_rate_limits(response: dict[str, Any]) -> bool:
 def read_account_rate_limits(executable_path: str, codex_home: Path) -> dict[str, Any]:
     env = os.environ.copy()
     env["CODEX_HOME"] = str(codex_home)
-    env["AUTO_AUTH_CODEX_WRAPPER_ACTIVE"] = "1"
-    env["CMUX_CODEX_AUTO_AUTH_DISABLED"] = "1"
+    env["AUTO_AUTH_CLI_ACTIVE"] = "1"
     process = subprocess.Popen(
         [executable_path, "app-server", "--listen", "stdio://"],
         stdin=subprocess.PIPE,

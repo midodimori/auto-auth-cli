@@ -238,6 +238,8 @@ The `resume --last` examples use the Codex CLI resume command to continue the mo
 |----------|-------------|---------|
 | `CODEX_HOME` | Active Codex config directory | `~/.codex` |
 | `AUTO_AUTH_HOME` | Root directory for saved profiles and backups | `~/.auto-auth` |
+| `AUTO_AUTH_CLI_ACTIVE` | Signals that a child process is already managed by `auto-auth` | Unset |
+| `AUTO_AUTH_CLI_RELAUNCH_ARGV_B64` | NUL-separated, Base64-encoded prefix for session relaunchers | Unset |
 
 ### Claude Code
 

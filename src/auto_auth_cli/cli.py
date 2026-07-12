@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -42,7 +43,11 @@ def run(argv: list[str]) -> int:
                 f"Using {adapter.name} auth profile: {profile.metadata.label}",
                 file=sys.stderr,
             )
-            return _exec_tool(adapter, args.tool_args)
+            return _exec_tool(
+                adapter,
+                args.tool_args,
+                ["auto-auth", adapter.name, "--profile", args.profile, "--"],
+            )
     except (
         OSError,
         ValueError,
@@ -212,7 +217,11 @@ def _auto(adapter: ToolAdapter, store: ProfileStore, tool_args: list[str]) -> in
         f"Using {adapter.name} auth profile: {profile.metadata.label}",
         file=sys.stderr,
     )
-    return _exec_tool(adapter, tool_args)
+    return _exec_tool(
+        adapter,
+        tool_args,
+        ["auto-auth", adapter.name, "--auto", "--"],
+    )
 
 
 def _metadata_with_label_fallback(
@@ -230,11 +239,18 @@ def _metadata_with_label_fallback(
     )
 
 
-def _exec_tool(adapter: ToolAdapter, tool_args: list[str]) -> int:
+def _exec_tool(
+    adapter: ToolAdapter, tool_args: list[str], relaunch_prefix: list[str]
+) -> int:
     args = tool_args[1:] if tool_args and tool_args[0] == "--" else tool_args
     argv = [adapter.executable, *args]
+    env = os.environ.copy()
+    env["AUTO_AUTH_CLI_ACTIVE"] = "1"
+    env["AUTO_AUTH_CLI_RELAUNCH_ARGV_B64"] = base64.b64encode(
+        b"\0".join(argument.encode() for argument in relaunch_prefix) + b"\0"
+    ).decode()
     try:
-        os.execvp(adapter.executable, argv)
+        os.execvpe(adapter.executable, argv, env)
     except SystemExit as exc:
         return int(exc.code or 0)
     return 0
